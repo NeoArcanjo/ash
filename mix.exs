@@ -389,6 +389,7 @@ defmodule Ash.MixProject do
       # Data & types
       {:decimal, "~> 2.0"},
       {:comparable, "~> 1.0"},
+      {:comparable_decimal, "~> 0.2.1", organization: "coingaming"},
       {:jason, ">= 1.0.0"},
       # Observability
       {:telemetry, "~> 1.1"},
