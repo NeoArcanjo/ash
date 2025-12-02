@@ -2078,7 +2078,14 @@ defmodule Ash do
          {:ok, read_opts} <-
            ReadOpts.validate(Keyword.take(opts, Keyword.keys(@read_opts_schema))),
          read_opts <- ReadOpts.to_options(read_opts),
-         {:ok, result} <- do_get(resource, filter, domain, opts, read_opts) do
+         {:ok, action} <-
+           Ash.Helpers.get_action(
+             resource,
+             opts,
+             :read,
+             Ash.Resource.Info.primary_action(resource, :read)
+           ),
+         {:ok, result} <- do_get(resource, filter, domain, opts, action, read_opts) do
       {:ok, result}
     else
       {:error, error} ->
@@ -2086,7 +2093,7 @@ defmodule Ash do
     end
   end
 
-  defp do_get(resource, filter, domain, opts, read_opts) do
+  defp do_get(resource, filter, domain, opts, action, read_opts) do
     query =
       resource
       |> Ash.Query.new(domain: domain)
@@ -2103,7 +2110,7 @@ defmodule Ash do
       end
 
     query
-    |> Ash.Actions.Read.unpaginated_read(opts[:action] || query.action, read_opts)
+    |> Ash.Actions.Read.unpaginated_read(action, read_opts)
     |> case do
       {:ok, %{results: [single_result]}} ->
         {:ok, single_result}
@@ -2451,6 +2458,19 @@ defmodule Ash do
     Ash.Helpers.expect_options!(opts)
     resource = Ash.Helpers.resource_from_data!(values, query, opts)
     load(values, query, Keyword.put(opts, :resource, resource))
+  end
+
+  def load(%Ash.Query{}, _query, _opts) do
+    raise ArgumentError,
+      message: """
+      Ash.load expects a record or records, not an Ash.Query. You probably want to
+      load it in the query directly instead:
+
+      query
+      |> Ash.Query.for_read(:read, load: :the_field_that_you_want_to_load)
+
+      See: https://hexdocs.pm/ash/Ash.Query.html#load/3
+      """
   end
 
   def load(%struct{results: results} = page, query, opts)
