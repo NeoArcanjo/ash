@@ -10,7 +10,7 @@ defmodule Ash.MixProject do
   A declarative, extensible framework for building Elixir applications.
   """
 
-  @version "3.11.1"
+  @version "3.12.0"
 
   def project do
     [
@@ -388,6 +388,8 @@ defmodule Ash.MixProject do
       {:ets, "~> 0.8"},
       # Data & types
       {:decimal, "~> 2.0"},
+      {:comparable, "~> 1.0"},
+      {:comparable_decimal, "~> 0.2.1", organization: "coingaming"},
       {:jason, ">= 1.0.0"},
       # Observability
       {:telemetry, "~> 1.1"},

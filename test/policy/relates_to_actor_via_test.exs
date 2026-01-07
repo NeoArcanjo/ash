@@ -9,7 +9,10 @@ defmodule Ash.Test.Policy.RelatesToActorViaTest do
   alias Ash.Test.Domain, as: Domain
 
   defmodule Actor do
-    use Ash.Resource, domain: Domain, data_layer: Ash.DataLayer.Ets
+    use Ash.Resource,
+      domain: Domain,
+      data_layer: Ash.DataLayer.Ets,
+      authorizers: [Ash.Policy.Authorizer]
 
     actions do
       default_accept :*
@@ -22,6 +25,12 @@ defmodule Ash.Test.Policy.RelatesToActorViaTest do
 
     attributes do
       uuid_primary_key :id
+    end
+
+    policies do
+      policy action(:read) do
+        authorize_if relates_to_actor_via(:company, field: :company)
+      end
     end
 
     calculations do
@@ -41,6 +50,19 @@ defmodule Ash.Test.Policy.RelatesToActorViaTest do
     relationships do
       belongs_to :user, Ash.Test.Policy.RelatesToActorViaTest.User, public?: true
       belongs_to :role, Ash.Test.Policy.RelatesToActorViaTest.Role, public?: true
+      belongs_to :company, Ash.Test.Policy.RelatesToActorViaTest.Company, public?: true
+    end
+  end
+
+  defmodule Company do
+    use Ash.Resource, domain: Domain, data_layer: Ash.DataLayer.Ets
+
+    actions do
+      defaults [:create, :read]
+    end
+
+    attributes do
+      uuid_primary_key :id
     end
   end
 
@@ -197,6 +219,65 @@ defmodule Ash.Test.Policy.RelatesToActorViaTest do
         |> Ash.load!(:type)
 
       assert {:ok, _} = Ash.get(Account, account.id, actor: actor)
+    end
+
+    test "relates_to_actor_via does not require relationship load for belongs_to" do
+      # the company our Actor belongs to
+      %{id: company_id} = company = Ash.create!(Company)
+      other_company = Ash.create!(Company)
+
+      actor =
+        Actor
+        |> Ash.Changeset.for_create(:create)
+        |> Ash.Changeset.manage_relationship(:company, company, type: :append)
+        |> Ash.create!(authorize?: false)
+
+      same_company_actor =
+        Actor
+        |> Ash.Changeset.for_create(:create)
+        |> Ash.Changeset.manage_relationship(:company, company, type: :append)
+        |> Ash.create!(authorize?: false)
+
+      other_actor =
+        Actor
+        |> Ash.Changeset.for_create(:create, %{})
+        |> Ash.Changeset.manage_relationship(:company, other_company, type: :append)
+        |> Ash.create!(authorize?: false)
+
+      # same company, our actor should be authorized to read
+      assert {:ok, %Actor{}} = Ash.get(Actor, %{id: same_company_actor.id}, actor: actor)
+
+      # read actor without loading company - for belongs_to, we use company_id directly
+      assert actor =
+               %Actor{company: %Ash.NotLoaded{}, company_id: ^company_id} =
+               Ash.get!(Actor, %{id: actor.id}, authorize?: false)
+
+      # Should still work because belongs_to uses source_attribute (company_id) directly
+      assert {:ok, %Actor{}} = Ash.get(Actor, %{id: same_company_actor.id}, actor: actor)
+
+      # Different company should not be found (filtered out by policy)
+      assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Query.NotFound{}]}} =
+               Ash.get(Actor, %{id: other_actor.id}, actor: actor)
+
+      # If source_attribute is NotLoaded but relationship is loaded, it should fall back to relationship
+      actor_with_loaded_company = Ash.load!(actor, :company)
+
+      actor_with_unloaded_company_id =
+        Map.put(actor_with_loaded_company, :company_id, %Ash.NotLoaded{field: :company_id})
+
+      assert {:ok, %Actor{}} =
+               Ash.get(Actor, %{id: same_company_actor.id}, actor: actor_with_unloaded_company_id)
+
+      # But if both source_attribute and relationship are NotLoaded, it should raise
+      # with a hint to load the source_attribute as the more optimal choice
+      actor_with_both_unloaded =
+        actor
+        |> Map.put(:company_id, %Ash.NotLoaded{field: :company_id})
+        |> Map.put(:company, %Ash.NotLoaded{field: :company})
+
+      assert_raise Ash.Error.Unknown, ~r"Loading `:company_id` is more optimal", fn ->
+        Ash.get(Actor, %{id: same_company_actor.id}, actor: actor_with_both_unloaded)
+      end
     end
 
     test "relates_to_actor_via with has_many" do

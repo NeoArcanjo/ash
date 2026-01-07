@@ -104,9 +104,3 @@ defmodule Ash.Type.Time do
     Ecto.Type.dump(storage_type(constraints), value)
   end
 end
-
-import Ash.Type.Comparable
-
-defcomparable left :: Time, right :: Time do
-  Time.compare(left, right)
-end

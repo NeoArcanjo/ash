@@ -55,9 +55,3 @@ defmodule Ash.Type.NaiveDatetime do
     Ecto.Type.dump(:naive_datetime, value)
   end
 end
-
-import Comp
-
-defcomparable left :: NaiveDateTime, right :: NaiveDateTime do
-  NaiveDateTime.compare(left, right)
-end

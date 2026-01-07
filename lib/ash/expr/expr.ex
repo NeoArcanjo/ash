@@ -223,9 +223,11 @@ defmodule Ash.Expr do
 
       {:_actor, field} when is_atom(field) or is_binary(field) ->
         Map.get(opts[:actor] || %{}, field)
+        |> raise_if_not_loaded!(opts[:actor], List.wrap(field))
 
       {:_actor, path} when is_list(path) ->
         get_path(opts[:actor] || %{}, path)
+        |> raise_if_not_loaded!(opts[:actor], path)
 
       :_tenant ->
         opts[:tenant]
@@ -291,6 +293,8 @@ defmodule Ash.Expr do
   end
 
   @doc false
+  def get_path(%Ash.NotLoaded{} = not_loaded, _), do: not_loaded
+
   def get_path(map, [key]) when is_map(map) do
     Map.get(map, key)
   end
@@ -300,6 +304,18 @@ defmodule Ash.Expr do
   end
 
   def get_path(_, _), do: nil
+
+  defp raise_if_not_loaded!(%Ash.NotLoaded{}, actor, path) do
+    raise ArgumentError, """
+    Actor field is not loaded: #{inspect(path)}
+
+    Actor: #{inspect(actor)}
+
+    Ensure the field is loaded on the actor before using it in a filter template.
+    """
+  end
+
+  defp raise_if_not_loaded!(value, _actor, _path), do: value
 
   @doc false
   def template_references_actor?(template) do
@@ -505,6 +521,21 @@ defmodule Ash.Expr do
           call
           | args: Enum.map(args, &walk_template(&1, mapper))
         }
+
+      other ->
+        walk_template(other, mapper)
+    end
+  end
+
+  def walk_template(%Ash.Query.Calculation{opts: opts} = calc, mapper) do
+    case mapper.(calc) do
+      ^calc ->
+        new_opts =
+          Keyword.update(opts, :expr, nil, fn expr ->
+            walk_template(expr, mapper)
+          end)
+
+        %{calc | opts: new_opts}
 
       other ->
         walk_template(other, mapper)
@@ -1106,58 +1137,91 @@ defmodule Ash.Expr do
           nil
       end
 
-    cond do
-      :erlang.function_exported(mod, :types, 0) ->
-        {mod.types(), mod.returns()}
+    {types, returns} =
+      cond do
+        :erlang.function_exported(mod, :types, 0) ->
+          {mod.types(), mod.returns()}
 
-      :erlang.function_exported(mod, :args, 0) ->
-        {mod.args(), mod.returns()}
+        :erlang.function_exported(mod, :args, 0) ->
+          {mod.args(), mod.returns()}
 
-      true ->
-        {[:any], [:any]}
-    end
-    |> then(fn {types, returns} ->
-      if types == :var_args || returns == :no_return || returns == :unknown do
-        []
-      else
-        overloads = Ash.Query.Operator.operator_overloads(name) || %{}
-
-        more_types = Map.keys(overloads)
-        more_returns = Map.values(overloads)
-        types = Enum.concat(types, List.wrap(more_types))
-        returns = Enum.concat(returns, List.wrap(more_returns))
-
-        returns =
-          Enum.map(returns, fn
-            {:array, any} when any in [:same, :any] -> {:array, any}
-            any when any in [:same, :any] -> any
-            {type, constraints} -> get_type({type, constraints})
-            type -> get_type({type, []})
-          end)
-
-        types =
-          Enum.map(types, fn
-            types when is_list(types) ->
-              Enum.map(types, fn
-                {:array, any} when any in [:same, :any] -> {:array, any}
-                any when any in [:same, :any] -> any
-                {type, constraints} -> get_type({type, constraints})
-                type -> get_type({type, []})
-              end)
-
-            types ->
-              types
-          end)
-
-        Enum.zip(types, returns)
+        true ->
+          {[:any], [:any]}
       end
+
+    overloads = Ash.Query.Operator.operator_overloads(name) || %{}
+
+    overload_index_cap = Enum.count(overloads) - 1
+
+    if types == :var_args || returns == :no_return || returns == :unknown do
+      []
+    else
+      {more_match_types, overload_cast_as_types, overload_returns} =
+        overloads
+        |> Enum.reduce({[], [], []}, fn {match_types, value}, {match_acc, cast_acc, return_acc} ->
+          case value do
+            {cast_as_types, return_type} when is_list(cast_as_types) ->
+              {[match_types | match_acc], [cast_as_types | cast_acc], [return_type | return_acc]}
+
+            return_type ->
+              {[match_types | match_acc], [nil | cast_acc], [return_type | return_acc]}
+          end
+        end)
+        |> then(fn {m, c, r} -> {Enum.reverse(m), Enum.reverse(c), Enum.reverse(r)} end)
+
+      # Put overloads first so they have priority over built-in types like :same
+      types = Enum.concat(more_match_types, types)
+
+      cast_as_types_list =
+        Enum.concat(
+          overload_cast_as_types,
+          Stream.duplicate(nil, length(types))
+        )
+
+      returns = Enum.concat(overload_returns, returns)
+
+      returns =
+        Enum.map(returns, fn
+          {:array, any} when any in [:same, :any] -> {:array, any}
+          any when any in [:same, :any] -> any
+          {type, constraints} -> get_type({type, constraints})
+          type -> get_type({type, []})
+        end)
+
+      normalize_types = fn types ->
+        Enum.map(types, fn
+          {:array, any} when any in [:same, :any] -> {:array, any}
+          any when any in [:same, :any] -> any
+          {type, constraints} -> get_type({type, constraints})
+          type -> get_type({type, []})
+        end)
+      end
+
+      types =
+        Enum.map(types, fn
+          types when is_list(types) -> normalize_types.(types)
+          types -> types
+        end)
+
+      cast_as_types_list =
+        Enum.map(cast_as_types_list, fn
+          types when is_list(types) -> normalize_types.(types)
+          types -> types
+        end)
+
+      types
+      |> Enum.zip(cast_as_types_list)
+      |> Enum.zip(returns)
+      |> Enum.map(fn {{match_types, cast_as_types}, returns} ->
+        {match_types, cast_as_types, returns}
+      end)
+    end
+    |> Enum.reject(fn {match_types, _, _} -> match_types == :any end)
+    |> Enum.filter(fn {match_types, _, _} ->
+      match_types == :same ||
+        length(match_types) == length(values)
     end)
-    |> Enum.reject(fn {typeset, _} -> typeset == :any end)
-    |> Enum.filter(fn {typeset, _} ->
-      typeset == :same ||
-        length(typeset) == length(values)
-    end)
-    |> Enum.map(fn {typeset, returns} ->
+    |> Enum.map(fn {match_types, cast_as_types, returns} ->
       basis =
         cond do
           !returns ->
@@ -1186,16 +1250,22 @@ defmodule Ash.Expr do
         end
 
       types_and_values =
-        if typeset == :same do
+        if match_types == :same do
           Enum.map(values, &{:same, &1})
         else
-          Enum.zip(typeset, values)
+          Enum.zip(match_types, values)
         end
 
       types_and_values
       |> Enum.with_index()
       |> Enum.reduce_while(
-        %{must_adopt_basis: [], basis: basis, types: [], fallback_basis: nil},
+        %{
+          must_adopt_basis: [],
+          basis: basis,
+          types: [],
+          fallback_basis: nil,
+          last_resort?: false
+        },
         fn
           {{vague_type, value}, index}, acc when vague_type in [:any, :same] ->
             case determine_type(value) do
@@ -1274,7 +1344,7 @@ defmodule Ash.Expr do
                  )}
             end
 
-          {{{type, constraints}, value}, _index}, acc ->
+          {{{type, constraints}, value}, index}, acc ->
             determined_type = determine_type(value)
 
             cond do
@@ -1294,13 +1364,18 @@ defmodule Ash.Expr do
                 {:cont, Map.update!(acc, :types, &[elem(determined_type, 1) | &1])}
 
               Ash.Expr.expr?(value) ->
-                {:cont, Map.update!(acc, :types, &[{type, constraints} | &1])}
+                if index < overload_index_cap do
+                  {:cont,
+                   acc |> Map.update!(:types, &[{type, []} | &1]) |> Map.put(:last_resort?, true)}
+                else
+                  {:cont, Map.update!(acc, :types, &[{type, []} | &1])}
+                end
 
               true ->
                 {:cont, Map.update!(acc, :types, &[{type, constraints} | &1])}
             end
 
-          {{type, value}, _index}, acc ->
+          {{type, value}, index}, acc ->
             determined_type = determine_type(value)
 
             cond do
@@ -1320,7 +1395,12 @@ defmodule Ash.Expr do
                 {:cont, Map.update!(acc, :types, &[elem(determined_type, 1) | &1])}
 
               Ash.Expr.expr?(value) ->
-                {:cont, Map.update!(acc, :types, &[{type, []} | &1])}
+                if index < overload_index_cap do
+                  {:cont,
+                   acc |> Map.update!(:types, &[{type, []} | &1]) |> Map.put(:last_resort?, true)}
+                else
+                  {:cont, Map.update!(acc, :types, &[{type, []} | &1])}
+                end
 
               true ->
                 {:cont, Map.update!(acc, :types, &[{type, []} | &1])}
@@ -1338,15 +1418,24 @@ defmodule Ash.Expr do
         :error ->
           nil
 
-        %{basis: nil, must_adopt_basis: [], types: types} ->
+        %{basis: nil, must_adopt_basis: [], types: types, last_resort?: last_resort?} ->
           if returns not in [:same, :any, {:array, :same}, {:array, :any}] do
-            {Enum.reverse(types), returns, Enum.count(types)}
+            output_types =
+              cast_as_types || Enum.reverse(types)
+
+            # must_adopt_basis is empty means all types matched exactly
+            {output_types, returns, 0, last_resort?}
           end
 
         %{basis: nil, must_adopt_basis: _} ->
           nil
 
-        %{basis: basis, must_adopt_basis: basis_adopters, types: types} ->
+        %{
+          basis: basis,
+          must_adopt_basis: basis_adopters,
+          types: types,
+          last_resort?: last_resort?
+        } ->
           returns =
             case returns do
               same when same in [:same, :any] ->
@@ -1360,21 +1449,34 @@ defmodule Ash.Expr do
                 other
             end
 
-          {basis_adopters
-           |> Enum.reduce(
-             Enum.reverse(types),
-             fn {index, function_of_basis}, types ->
-               List.replace_at(types, index, function_of_basis.(basis))
-             end
-           ), returns, Enum.count(basis_adopters)}
+          output_types =
+            cast_as_types ||
+              basis_adopters
+              |> Enum.reduce(
+                Enum.reverse(types),
+                fn {index, function_of_basis}, types ->
+                  List.replace_at(types, index, function_of_basis.(basis))
+                end
+              )
+
+          {output_types, returns, Enum.count(basis_adopters), last_resort?}
       end
     end)
     |> Enum.filter(& &1)
     |> case do
-      [{types, returns, _}] ->
+      [{types, returns, _, _}] ->
         {types, returns}
 
       types ->
+        types =
+          Enum.flat_map(types, fn {types, returns, basis_adopters, last_resort?} ->
+            if last_resort? do
+              []
+            else
+              [{types, returns, basis_adopters}]
+            end
+          end)
+
         select_matches(types, length(values), values)
     end
   end
