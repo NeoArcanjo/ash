@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule Ash.Reactor.Dsl.BulkCreate do
+defmodule Ash.Reactor.Dsl.BulkDestroy do
   @moduledoc """
-  The `bulk_create` entity for the `Ash.Reactor` reactor extension.
+  The `bulk_destroy` entity for the `Ash.Reactor` reactor extension.
   """
 
   @bulk_actions_default_to_errors? Application.compile_env(
@@ -17,22 +17,27 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
             action_step?: true,
             action: nil,
             actor: [],
-            assume_casted?: false,
+            allow_stream_with: :keyset,
             async?: true,
             authorize_changeset_with: :filter,
             authorize_query_with: :filter,
+            authorize_query?: true,
             authorize?: nil,
             batch_size: nil,
             context: nil,
             description: nil,
             domain: nil,
+            filter: %{},
             guards: [],
             initial: nil,
+            inputs: [],
             load: nil,
+            lock: nil,
             max_concurrency: 0,
             name: nil,
             notification_metadata: %{},
             notify?: false,
+            page: [],
             read_action: nil,
             resource: nil,
             return_errors?: @bulk_actions_default_to_errors?,
@@ -43,17 +48,17 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
             skip_unknown_inputs: [],
             sorted?: false,
             stop_on_error?: @bulk_actions_default_to_errors?,
+            strategy: [:atomic],
+            stream_batch_size: nil,
+            stream_with: nil,
             success_state: :success,
             tenant: [],
-            timeout: 30_000,
+            timeout: :infinity,
             transaction: false,
             transform: nil,
-            type: :bulk_create,
+            type: :bulk_destroy,
             undo_action: nil,
             undo: :never,
-            upsert_fields: nil,
-            upsert_identity: nil,
-            upsert?: false,
             wait_for: [],
             __spark_metadata__: nil
 
@@ -62,22 +67,29 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
           action_step?: true,
           action: atom,
           actor: nil | Ash.Reactor.Dsl.Actor.t(),
-          assume_casted?: boolean,
+          allow_stream_with: :keyset | :offset | :full_read,
           async?: boolean,
           authorize_changeset_with: :filter | :error,
           authorize_query_with: :filter | :error,
+          authorize_query?: boolean,
           authorize?: boolean | nil,
           batch_size: nil | pos_integer(),
           context: nil | Ash.Reactor.Dsl.Context.t(),
           description: String.t() | nil,
           domain: Ash.Domain.t(),
+          filter:
+            %{optional(String.t()) => %{required(String.t()) => String.t() | number | boolean}}
+            | Keyword.t(Keyword.t(String.t() | number | boolean)),
           guards: [Reactor.Guard.Build.t()],
           initial: Reactor.Template.t(),
+          inputs: [Ash.Reactor.Dsl.Inputs.t()],
           load: nil | Ash.Reactor.Dsl.ActionLoad.t(),
+          lock: nil | Ash.DataLayer.lock_type(),
           max_concurrency: non_neg_integer(),
           name: atom,
-          notification_metadata: map,
+          notification_metadata: map | Reactor.Template.t(),
           notify?: boolean,
+          page: Keyword.t(),
           read_action: atom,
           resource: module,
           return_errors?: boolean,
@@ -88,44 +100,43 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
           skip_unknown_inputs: list(atom | String.t()),
           sorted?: boolean,
           stop_on_error?: boolean,
+          strategy: :atomic | :atomic_batches | :stream,
+          stream_batch_size: nil | pos_integer(),
+          stream_with: nil | :keyset | :offset | :full_read,
           success_state: :success | :partial_success,
           tenant: nil | Ash.Reactor.Dsl.Tenant.t(),
           timeout: nil | timeout,
           transaction: :all | :batch | false,
-          type: :bulk_create,
+          type: :bulk_destroy,
           undo_action: nil,
           undo: :never,
-          upsert_fields:
-            nil | :replace_all | {:replace, [atom]} | {:replace_all_except, [atom]} | [atom],
-          upsert_identity: nil,
           __spark_metadata__: Spark.Dsl.Entity.spark_meta()
         }
 
   @doc false
   def __entity__,
     do: %Spark.Dsl.Entity{
-      name: :bulk_create,
+      name: :bulk_destroy,
       describe: """
-      Declares a step which will call a create action on a resource with a collection of inputs.
+      Declares a step which will call a destroy action on a resource with a collection of inputs.
 
       > ### Check the docs! {: .warning}
       >
-      > Make sure to thoroughly read and understand the documentation in `Ash.bulk_create/4` before using. Read each option and note the default values. By default, bulk creates don't return records or errors, and don't emit notifications.
+      > Make sure to thoroughly read and understand the documentation in `Ash.bulk_destroy/4` before using.  Read each option and note the default values.  By default, bulk destroys don't return records or errors, and don't emit notifications.
 
-      Caveats/differences from `Ash.bulk_create/4`:
+      Caveats/differences from `Ash.bulk_destroy/4`:
 
       1. `max_concurrency` specifies the number of tasks that Ash will start to process batches, and has no effect on Reactor concurrency targets.  It's could be possible to create a very large number of processes if a number of steps are running bulk actions with a high degree of concurrency.
-      2. Setting `notify?` to `true` will cause both `notify?` and `return_notifications?` to be set to true in the underlying call to `Ash.bulk_create/4`. Notifications will then be managed by the `Ash.Reactor.Notifications` Reactor middleware.
+      2. Setting `notify?` to `true` will cause both `notify?` and `return_notifications?` to be set to true in the underlying call to `Ash.bulk_destroy/4`. Notifications will then be managed by the `Ash.Reactor.Notifications` Reactor middleware.
       3. If you specify an undo action it must be a generic action which takes the bulk result as it's only argument.
 
       #{Ash.Reactor.Dsl.Action.__shared_undo_docs__()}
       """,
       examples: [
         """
-        bulk_create :create_posts, MyApp.Post, :create do
-          initial input(:titles)
+        bulk_destroy :destroy_posts, MyApp.Post, :destroy do
+          initial input(:posts),
           actor result(:get_user)
-          tenant result(:get_organisation, [:id])
         end
         """
       ],
@@ -138,20 +149,20 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
         actor: [Ash.Reactor.Dsl.Actor.__entity__()],
         context: [Ash.Reactor.Dsl.Context.__entity__()],
         guards: [Reactor.Dsl.Guard.__entity__(), Reactor.Dsl.Where.__entity__()],
-        load: [Ash.Reactor.Dsl.ActionLoad.__entity__()],
+        inputs: [Ash.Reactor.Dsl.Inputs.__entity__()],
         tenant: [Ash.Reactor.Dsl.Tenant.__entity__()],
         wait_for: [Reactor.Dsl.WaitFor.__entity__()]
       ],
-      singleton_entity_keys: [:actor, :context, :load, :tenant],
+      singleton_entity_keys: [:actor, :context, :tenant],
       recursive_as: :steps,
       schema:
         [
-          assume_casted?: [
-            type: :boolean,
+          allow_stream_with: [
+            type: {:in, [:keyset, :offset, :full_read]},
             doc:
-              "Whether or not to cast attributes and arguments as input. This is an optimization for cases where the input is already casted and/or not in need of casting",
+              "The 'worst' strategy allowed to be used to fetch records if the :stream strategy is chosen. See the `Ash.stream!/2` docs for more.",
             required: false,
-            default: false
+            default: :keyset
           ],
           authorize_changeset_with: [
             type: {:in, [:filter, :error]},
@@ -167,17 +178,34 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
             required: false,
             default: :filter
           ],
+          authorize_query?: [
+            type: :boolean,
+            doc:
+              "If a query is given, determines whether or not authorization is run on that query.",
+            required: false,
+            default: true
+          ],
           batch_size: [
             type: {:or, [nil, :pos_integer]},
             doc:
               "The number of records to include in each batch. Defaults to the `default_limit` or `max_page_size` of the action, or 100.",
             required: false
           ],
+          filter: [
+            type: {:or, [:map, :keyword_list]},
+            doc: "A filter to apply to records. This is also applied to a stream of inputs.",
+            required: false
+          ],
           initial: [
             type: Reactor.Template.type(),
             required: true,
             doc:
-              "A collection of inputs to pass to the create action. Must implement the `Enumerable` protocol."
+              "A query or collection of records to destroy. If a query is provided, records matching the query will be destroyed. If a collection is provided, it must implement the `Enumerable` protocol."
+          ],
+          lock: [
+            type: :any,
+            doc: "A lock statement to add onto the query.",
+            required: false
           ],
           max_concurrency: [
             type: :non_neg_integer,
@@ -200,6 +228,12 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
             required: false,
             default: false
           ],
+          page: [
+            type: :keyword_list,
+            doc: "Pagination options, see `Ash.read/2` for more.",
+            required: false,
+            default: []
+          ],
           read_action: [
             type: :atom,
             doc: "The action to use when building the read query.",
@@ -208,14 +242,14 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
           return_errors?: [
             type: :boolean,
             doc:
-              "Whether or not to return all of the errors that occur. Defaults to false to account for large inserts.",
+              "Whether or not to return all of the errors that occur. Defaults to false to account for large destroys.",
             required: false,
             default: @bulk_actions_default_to_errors?
           ],
           return_records?: [
             type: :boolean,
             doc:
-              "Whether or not to return all of the records that were inserted. Defaults to false to account for large inserts.",
+              "Whether or not to return all of the records that were destroyed. Defaults to false to account for large destroys.",
             required: false,
             default: false
           ],
@@ -258,6 +292,24 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
             required: false,
             default: @bulk_actions_default_to_errors?
           ],
+          strategy: [
+            type: {:list, {:in, [:atomic, :atomic_batches, :stream]}},
+            doc:
+              "The strategy or strategies to enable. `:stream` is used in all cases if the data layer does not support atomics.",
+            required: false,
+            default: [:atomic]
+          ],
+          stream_batch_size: [
+            type: :pos_integer,
+            doc: "Batch size to use if provided a query and the query must be streamed.",
+            required: false
+          ],
+          stream_with: [
+            type: {:in, [:keyset, :offset, :full_read]},
+            doc:
+              "The specific strategy to use to fetch records. See `Ash.stream!/2` docs for more.",
+            required: false
+          ],
           success_state: [
             type: {:in, [:success, :partial_success]},
             doc:
@@ -277,29 +329,6 @@ defmodule Ash.Reactor.Dsl.BulkCreate do
               "Whether or not to wrap the entire execution in a transaction, each batch, or not at all.",
             required: false,
             default: :batch
-          ],
-          upsert_fields: [
-            type:
-              {:or,
-               [
-                 {:literal, :replace_all},
-                 {:tuple, [{:literal, :replace}, {:wrap_list, :atom}]},
-                 {:tuple, [{:literal, :replace_all_except}, {:wrap_list, :atom}]},
-                 {:wrap_list, :atom}
-               ]},
-            doc: "The fields to upsert. If not set, the action's `upsert_fields` is used.",
-            required: false
-          ],
-          upsert_identity: [
-            type: :atom,
-            required: false,
-            doc: "The identity to use for the upsert"
-          ],
-          upsert?: [
-            type: :boolean,
-            required: false,
-            default: false,
-            doc: "Whether or not this action should be executed as an upsert."
           ]
         ]
         |> Spark.Options.merge(
