@@ -1,11 +1,10 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
 defmodule Ash.Resource.Calculation.Concat do
   @moduledoc false
   use Ash.Resource.Calculation
-  require Ash.Query
 
   @impl Ash.Resource.Calculation
   def init(opts) do

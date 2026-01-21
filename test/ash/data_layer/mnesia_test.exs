@@ -1,11 +1,10 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
 defmodule Ash.DataLayer.MnesiaTest do
   use ExUnit.Case, async: false
 
-  require IEx
   alias Ash.DataLayer.Mnesia, as: MnesiaDataLayer
   alias Ash.Test.Domain, as: Domain
 

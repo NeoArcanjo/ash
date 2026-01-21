@@ -1,10 +1,9 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
 defmodule Ash.Test.Actions.CreateTest do
   @moduledoc false
-  require Ash.Flags
   use ExUnit.Case, async: true
 
   import Ash.Test
@@ -730,7 +729,7 @@ defmodule Ash.Test.Actions.CreateTest do
       })
       |> Ash.create!()
 
-      assert_raise Ash.Error.Invalid, ~r/Stale/, fn ->
+      assert_raise Ash.Error.Invalid, ~r/stale/, fn ->
         Post
         |> Ash.Changeset.new()
         |> Ash.Changeset.change_attributes(%{

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
@@ -8,7 +8,6 @@ if Code.ensure_loaded?(Igniter) do
     Adds an extension or extensions to the domain/resource. Use `ash.extend` instead.
     """
     @shortdoc "Adds an extension or extensions to the given domain/resource"
-    require Igniter.Code.Common
     use Igniter.Mix.Task
 
     @impl Igniter.Mix.Task

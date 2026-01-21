@@ -1,12 +1,10 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
 defmodule Ash.Test.Changeset.AuthorizerTest do
   @moduledoc false
   use ExUnit.Case, async: false
-
-  require Ash.Query
 
   defmodule Post do
     use Ash.Resource,

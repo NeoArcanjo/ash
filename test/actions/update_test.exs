@@ -1,10 +1,9 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
 defmodule Ash.Test.Actions.UpdateTest do
   @moduledoc false
-  require Ash.Flags
   use ExUnit.Case, async: false
 
   import Ash.Test

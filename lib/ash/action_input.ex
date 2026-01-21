@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
@@ -13,7 +13,6 @@ defmodule Ash.ActionInput do
 
   alias Ash.Error.Action.InvalidArgument
 
-  require Ash.Flags
   require Ash.Tracer
 
   defstruct [

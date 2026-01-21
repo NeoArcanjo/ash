@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
@@ -71,6 +71,28 @@ defmodule Ash.Test.Actions.AggregateTest do
         condition(always())
         authorize_if expr(public == true)
       end
+    end
+  end
+
+  defmodule Tenant do
+    @doc false
+    use Ash.Resource, domain: Domain, data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    actions do
+      default_accept :*
+      defaults [:read, :create, :update, :destroy]
+    end
+
+    attributes do
+      uuid_primary_key :id, writable?: true
+    end
+
+    defimpl Ash.ToTenant do
+      def to_tenant(tenant, _resource), do: tenant.id
     end
   end
 
@@ -251,6 +273,33 @@ defmodule Ash.Test.Actions.AggregateTest do
 
       assert %{count: 2} =
                Ash.aggregate!(Post, {:count, :count}, tenant: "foo", authorize?: false)
+
+      assert %{count: 3} = Ash.aggregate!(Post, {:count, :count}, authorize?: false)
+    end
+
+    test "honors tenant as struct" do
+      tenant_foo = Ash.create!(Tenant, %{})
+      tenant_bar = Ash.create!(Tenant, %{})
+
+      assert %{count: 0} = Ash.aggregate!(Post, {:count, :count}, authorize?: false)
+
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "title"}, tenant: tenant_foo)
+      |> Ash.create!(authorize?: false)
+
+      assert %{count: 1} =
+               Ash.aggregate!(Post, {:count, :count}, tenant: tenant_foo, authorize?: false)
+
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "title"}, tenant: tenant_foo)
+      |> Ash.create!(authorize?: false)
+
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "title"}, tenant: tenant_bar)
+      |> Ash.create!(authorize?: false)
+
+      assert %{count: 2} =
+               Ash.aggregate!(Post, {:count, :count}, tenant: tenant_foo, authorize?: false)
 
       assert %{count: 3} = Ash.aggregate!(Post, {:count, :count}, authorize?: false)
     end
@@ -534,6 +583,13 @@ defmodule Ash.Test.Actions.AggregateTest do
       post = Ash.load!(post, :sum_of_doubled_thing3, authorize?: false)
 
       assert post.sum_of_doubled_thing3 == 36
+    end
+
+    test "Info.aggregate_type returns correct type for aggregate referencing a calculation" do
+      # sum_of_doubled_thing3 references the doubled_thing3 calculation on Comment.
+      # Previously this returned {:ok, nil} because attribute/2 was used instead of field/2.
+      assert {:ok, Ash.Type.Integer} =
+               Ash.Resource.Info.aggregate_type(Post, :sum_of_doubled_thing3)
     end
   end
 end

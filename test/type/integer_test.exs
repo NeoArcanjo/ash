@@ -1,12 +1,10 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
 defmodule Ash.Test.Type.IntegerTest do
   @moduledoc false
   use ExUnit.Case, async: true
-
-  require Ash.Query
 
   describe "atomic validation" do
     test "valid value" do

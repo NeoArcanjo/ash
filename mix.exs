@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
@@ -10,7 +10,7 @@ defmodule Ash.MixProject do
   A declarative, extensible framework for building Elixir applications.
   """
 
-  @version "3.12.0"
+  @version "3.13.1"
 
   def project do
     [
@@ -398,7 +398,7 @@ defmodule Ash.MixProject do
       # Used for Ash.PlugHelpers
       {:plug, ">= 0.0.0", optional: true},
       # Used for aggregatable and standardized exceptions
-      {:splode, "~> 0.2 and >= 0.2.6"},
+      {:splode, "~> 0.3"},
       # Testing Utilities
       {:stream_data, "~> 1.0"},
 

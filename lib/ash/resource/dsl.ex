@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
@@ -1672,7 +1672,7 @@ defmodule Ash.Resource.Dsl do
     Ash.Resource.Verifiers.VerifyPrimaryReadActionHasNoArguments,
     Ash.Resource.Verifiers.VerifySelectedByDefault,
     Ash.Resource.Verifiers.VerifyFilterExpressions,
-    Ash.Resource.Verifiers.EnsureAggregateFieldIsAttributeOrCalculation,
+    Ash.Resource.Verifiers.ValidateAggregateField,
     Ash.Resource.Verifiers.ValidateRelationshipAttributes,
     Ash.Resource.Verifiers.NoReservedFieldNames,
     Ash.Resource.Verifiers.ValidateAccept,

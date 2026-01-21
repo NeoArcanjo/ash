@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
@@ -6,8 +6,6 @@ defmodule Ash.Test do
   @moduledoc """
   Testing helpers for Ash.
   """
-
-  require ExUnit.Assertions
 
   @doc """
   Assert that the given changeset, query, or action input has a matching error.

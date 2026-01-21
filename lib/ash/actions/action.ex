@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs.contributors>
+# SPDX-FileCopyrightText: 2019 ash contributors <https://github.com/ash-project/ash/graphs/contributors>
 #
 # SPDX-License-Identifier: MIT
 
@@ -240,6 +240,9 @@ defmodule Ash.Actions.Action do
       |> case do
         {:ok, _v} when is_nil(input.action.returns) ->
           :ok
+
+        {:error, %{splode: Reactor.Error, errors: errors}} ->
+          {:error, errors}
 
         other ->
           other
